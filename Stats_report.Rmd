@@ -1,0 +1,651 @@
+---
+title: "Statistical Report"
+author: "Katrina Li"
+date: "2023-02-12"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(forcats)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(stringr)
+library(sjPlot)
+library(emmeans)
+library(forcats)
+```
+
+# Cantonese (HLVC dataset)
+
+We read two data files: 
+
+```{r read data, echo=TRUE}
+can_original <- read.delim("processed_canCHN.tsv", header = F, sep ="\t")
+can_freq_original <- read.delim("processed_canCHN_freq.tsv",header = F, sep ="\t")
+```
+
+We then clean the datasets and merge the two, generating `can.regdata` used in the regression model.
+```{r clean dataset}
+can <- can_original %>%
+  rename(
+    sent_word = V1,
+    sent_cn = V2,
+    langs = V3,
+    pos =V4,
+    tone_initial = V5,
+    tone_last = V6,
+    en_cn = V7,
+    info_ec_en = V8,
+    cn_en = V9,
+    info_ce_en = V10,
+    cn_null_en = V11,
+    info_cne_null = V12,
+    info_cen_en = V13,
+    en_null_cn = V14,
+    info_enc_null = V15,
+    info_enc_en = V16,
+    filename = V17,
+    sentence = V18,
+    token =V19
+  ) 
+
+can_freq <- can_freq_original %>%
+  rename(
+    word = V1,
+    freq = V2,
+    lang = V3
+  ) %>%
+  mutate(
+    lang = as.factor(lang),
+    zipfreq = log10(freq*1000000)
+  )
+
+
+can_freq_formerge <- can_freq %>%
+  filter(lang != "cn_dict" & lang != "tone") %>%
+  mutate(
+    langs = case_when(
+      lang == "cn_char_dict" ~ "cn",
+      lang == "en_dict" ~ "en",
+      lang == "filler_dict" ~ "null"
+    )
+  )
+  
+can.combine <- can %>%
+  left_join(can_freq_formerge, by = c("sent_cn" = "word", "langs" = "langs")) %>%
+  mutate(
+    cn_en = as.factor(cn_en),
+    en_cn = as.factor(en_cn),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    POS = as.factor(pos),
+    speaker = sub("\\_.*","",filename),
+    SPEAKER = as.factor(speaker),
+    generation = substr(speaker,2,2),
+    GENERATION = if_else(generation == "2"|generation == "3", "23", generation),
+    GENERATION = as.factor(GENERATION),
+    gender = substr(speaker,3,3),
+    GENDER = as.factor(gender),
+    TOKEN = if_else(zipfreq > 4, sent_cn, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN),
+    filename = as.factor(filename)
+  )
+
+# check if any rows in the dataset are not merged
+# can %>%
+#   anti_join(can_freq_formerge, by = c("sent_cn" = "word", "langs" = "langs"))
+
+# Regression data
+can.regdata <- can.combine %>%
+  filter(
+    langs == "cn"
+  ) %>%
+  mutate(
+    en_cn = as.factor(en_cn),
+    cn_en = as.factor(cn_en),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    tone_initial = as.factor(tone_initial),
+    tone_last = as.factor(tone_last),
+    pos = if_else(pos == "V", "VERB", pos),
+    POS = as.factor(pos),
+    SPEAKER = as.factor(speaker),
+    GENERATION = as.factor(GENERATION),
+    GENDER = as.factor(gender),
+    TOKEN = if_else(zipfreq > 4, sent_word, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN)
+  )
+
+# Assign the reference level of factor variables
+can.regdata$tone_last = as.factor(can.regdata$tone_last)
+can.regdata$tone_last = relevel(can.regdata$tone_last, ref = "4")
+can.regdata$tone_initial = as.factor(can.regdata$tone_initial)
+can.regdata$tone_initial = relevel(can.regdata$tone_initial, ref = "4")
+can.regdata$GENERATION = relevel(can.regdata$GENERATION, ref = "X")
+can.regdata$GENDER = relevel(can.regdata$GENDER, ref = "M")
+can.regdata$POS = relevel(can.regdata$POS, ref = "ADJ")
+can.regdata$SPEAKER = droplevels(can.regdata$SPEAKER)
+can.regdata$TOKEN = droplevels(can.regdata$TOKEN)
+```
+
+## Summary statistics of HLVC variables
+
+### SPEAKER
+
+balenced in gender and generation
+```{r about speaker}
+can.speaker <- distinct(can.regdata,SPEAKER,.keep_all = TRUE)
+table(can.speaker$GENDER)
+table(can.speaker$GENERATION)
+table(can.speaker$GENERATION, can.speaker$GENDER)
+```
+
+### TOKEN
+
+14 tokens with high frequency + 'other'
+```{r}
+nlevels(can.regdata$TOKEN)
+table(can.regdata$TOKEN)
+```
+
+### Zipfreq
+
+14 Chinese words has a zipf larger than 4, cover 30% of the tokens.
+
+```{r}
+mean(can.regdata$zipfreq)
+sd(can.regdata$zipfreq)
+nrow(can.regdata[can.regdata$zipfreq > 4,])/nrow(can.regdata)
+```
+
+### POS
+
+```{r}
+nlevels(can.regdata$POS)
+table(can.regdata$POS)
+```
+
+## Regression models of Cantonese
+### Cantonese-English code switching
+
+**can.ce <- glmer(cn_en ~ tone_last + zipfreq + POS + GENDER + GENERATION + 
+                                   (tone_last|SPEAKER) +
+                                   (1|TOKEN),
+                           data = can.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+```{r include=FALSE}
+can.ce <- readRDS("230205can_ce.glmer.final.rds")
+```
+
+```{r full model}
+summary(can.ce)
+```
+
+**Post-hoc comparisons**
+```{r post hoc}
+emmeans(can.ce, list(pairwise~tone_last), type='response')
+```
+
+### English-Cantonese code-switching:
+
+**can.ec <- glmer(en_cn ~ tone_initial + zipfreq + POS + GENDER + GENERATION + 
+                                   (tone_initial|SPEAKER) +
+                                   (1|TOKEN),
+                           data = can.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+                          
+```{r include=FALSE}
+can.ec <- readRDS("230205can_ec.glmer.final.rds")
+```
+
+Full model:
+```{r}
+summary(can.ec)
+```
+
+**Post-hoc comparison**
+```{r}
+emmeans(can.ec, list(pairwise~tone_initial), type='response')
+```
+
+# Mandarin (SEAME)
+We read two data files: 
+
+```{r echo=TRUE}
+man_original <- read.delim("processed_man.tsv", header = F, sep ="\t")
+man_freq_original <- read.delim("processed_man_freq.tsv",header = F, sep ="\t")
+```
+
+```{r read data and merge with frequency}
+man <- man_original %>%
+  rename(
+    sent_word = V1,
+    sent_cn = V2,
+    langs = V3,
+    pos =V4,
+    tone_initial = V5,
+    tone_last = V6,
+    en_cn = V7,
+    info_ec_en = V8,
+    cn_en = V9,
+    info_ce_en = V10,
+    cn_null_en = V11,
+    info_cne_null = V12,
+    info_cen_en = V13,
+    en_null_cn = V14,
+    info_enc_null = V15,
+    info_enc_en = V16,
+    filename = V17,
+    sentence = V18,
+    token =V19,
+    txtname = V20
+  ) 
+
+man_freq <- man_freq_original %>%
+  rename(
+    word = V1,
+    freq = V2,
+    lang = V3
+  ) %>%
+  mutate(
+    lang = as.factor(lang),
+    freq = as.numeric(freq),
+    zipfreq = log10(freq*1000000)
+  )
+#summary(man_freq)
+
+man_freq_formerge <- man_freq %>%
+  filter(lang != "cn_dict" & lang != "tone") %>%
+  mutate(
+    langs = case_when(
+      lang == "cn_char_dict" ~ "cn",
+      lang == "en_dict" ~ "en",
+      lang == "filler_dict" ~ "null"
+    )
+  )
+
+  
+man.combine <- man %>%
+  left_join(man_freq_formerge, by = c("sent_cn" = "word", "langs" = "langs")) %>%
+  mutate(
+    #tone_last = as.factor(tone_last),
+    #tone_initial = as.factor(tone_initial),
+    cn_en = as.factor(cn_en),
+    en_cn = as.factor(en_cn),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    POS = as.factor(pos),
+    speaker = sub("\\_.*","",filename),
+    SPEAKER = substring(speaker,1,5),
+    GENDER = substring(SPEAKER,nchar(SPEAKER),nchar(SPEAKER)),
+    TOKEN = if_else(zipfreq > 4, sent_cn, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN),
+    langgroup = gsub("^.*/","",txtname),
+    LANGUAGE = substring(langgroup,5,7),
+    LANGUAGE = as.factor(LANGUAGE),
+    SPEAKER = as.factor(SPEAKER),
+    GENDER = as.factor(GENDER)
+  )
+
+
+# Check the merge direction from the other
+# man %>%
+#   anti_join(man_freq_formerge, by = c("sent_cn" = "word"))
+
+# Regression data
+man.regdata <- man.combine %>%
+  filter(
+    langs == "cn"
+  ) %>%
+  mutate(
+    en_cn = as.factor(en_cn),
+    cn_en = as.factor(cn_en),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    tone_initial = as.factor(tone_initial),
+    tone_last = as.factor(tone_last),
+    POS = as.factor(pos),
+    SPEAKER = as.factor(SPEAKER),
+    LANGUAGE = as.factor(LANGUAGE),
+    GENDER = as.factor(GENDER),
+    TOKEN = if_else(zipfreq > 4, sent_word, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN)
+  )
+
+# Assign the reference level of factor variables
+man.regdata$tone_last = as.factor(man.regdata$tone_last)
+man.regdata$tone_last = relevel(man.regdata$tone_last, ref = "2")
+man.regdata$tone_initial = as.factor(man.regdata$tone_initial)
+man.regdata$tone_initial = relevel(man.regdata$tone_initial, ref = "2")
+man.regdata$GENDER = relevel(man.regdata$GENDER, ref = "m")
+man.regdata$LANGUAGE = relevel(man.regdata$LANGUAGE, ref = "man")
+man.regdata$POS = relevel(man.regdata$POS, ref = "ADJ")
+man.regdata$SPEAKER = droplevels(man.regdata$SPEAKER)
+man.regdata$TOKEN = droplevels(man.regdata$TOKEN)
+```
+
+## Summary statistics of SEAME variables
+
+### SPEAKER
+
+balanced for language dominance and gender
+```{r speaker}
+man.speaker <- distinct(man.combine,SPEAKER,.keep_all = TRUE)
+table(man.speaker$LANGUAGE, man.speaker$GENDER)
+table(man.speaker$LANGUAGE, man.speaker$GENDER)
+```
+
+### TOKEN
+
+24 tokens with high frequency  + 'other'
+
+```{r}
+nlevels(man.regdata$TOKEN)
+table(man.regdata$TOKEN)
+```
+
+### Zipfreq
+
+23 Chinese words has a zipf larger than 4, cover 46% of the tokens.
+
+```{r}
+mean(man.regdata$zipfreq)
+sd(man.regdata$zipfreq)
+nrow(man.regdata[man.regdata$zipfreq > 4,])/nrow(man.regdata)
+```
+
+### POS
+```{r}
+nlevels(man.regdata$POS)
+table(man.regdata$POS)
+```
+
+## Regression models of Mandarin
+### Mandarin-English code switching
+**man.me <- glmer(cn_en ~ tone_last + zipfreq + POS + GENDER + LANGUAGE + 
+                                   (tone_last|SPEAKER) +
+                                   (1|TOKEN),
+                           data = man.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+                          
+```{r include=FALSE}
+man.me <- readRDS("230205man_me.glmer.final.rds")
+man.em <- readRDS("230205man_em.glmer.final.rds")
+```
+
+```{r}
+summary(man.me)
+```
+
+**Post-hoc comparisons**
+```{r}
+emmeans(man.me, list(pairwise~tone_last), type='response')
+```
+
+### English-Mandarin code switching
+**man.em <- glmer(en_cn ~ tone_initial + zipfreq + POS + GENDER + LANGUAGE + 
+                                   (tone_initial|SPEAKER) +
+                                   (1|TOKEN),
+                           data = man.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+
+```{r}
+summary(man.em)
+```
+
+**Post-hoc comparisons**
+```{r}
+emmeans(man.em, list(pairwise~tone_initial), type='response')
+```
+
+# Vietnamese (CanVEC)
+We read three data files: 
+
+speakerprofile is extracted from Nguyen 's thesis (2020).
+
+```{r read the files, echo=TRUE}
+vie_original <- read.delim("processed_canvec.tsv", header = F, sep ="\t")
+vie_freq_original <- read.delim("processed_vie_freq.tsv",header = F, sep ="\t")
+vie_speaker_original <- read.delim("speakerprofile.csv", header = F, sep = ",") 
+```
+
+```{r read viet data and merge with frequency}
+vie <- vie_original %>%
+  rename(
+    sent_word = V1,
+    langs = V2,
+    pos =V3,
+    tone = V4,
+    en_vn = V5,
+    info_ev_en = V6,
+    vn_en = V7,
+    info_ve_en = V8,
+    vn_null_en = V9,
+    info_vne_null = V10,
+    info_vne_en = V11,
+    en_null_vn = V12,
+    info_env_null = V13,
+    info_env_en = V14,
+    speaker = V15,
+    generation = V16,
+    sentence = V17,
+    token =V18
+  ) %>%
+  mutate(speaker2 = case_when(
+  speaker == "Dany2" ~ "Dany",
+  speaker == "Jess2" ~ "Jess",
+  speaker == "Henry2" ~ "Henry",
+  speaker == "Tom2" ~ "Tom",
+  speaker == "Tim2" ~ "Tim",
+  speaker == "Tressie2" ~ "Tressie",
+  speaker == "﻿Billy" ~ "Billy",
+  TRUE ~ speaker
+  ),
+  #langs = if_else(sent_word == "nam", "@non", langs),
+  pos = if_else(pos=="Z","X",pos),
+  tone.list = gsub("\\[|\\]", "", tone),
+  tone.list = gsub(" ","", tone.list),
+  tone_initial = substr(tone.list, 1,1),
+  tone_last = substr(tone.list,nchar(tone.list),nchar(tone.list)),
+  leng = nchar(tone.list))
+
+vie_freq <- vie_freq_original %>%
+  rename(
+    word = V1,
+    freq = V2,
+    lang = V3
+  ) %>%
+  mutate(
+    lang = as.factor(lang),
+    freq = as.numeric(freq),
+    zipfreq = log10(freq*1000000)
+  )
+
+vie_freq_formerge <- vie_freq %>%
+  filter(lang != "tone") %>%
+  mutate(
+    langs = case_when(
+      lang == "en" ~ "@eng",
+      lang == "vn" ~ "@vie",
+      lang == "filler_dict" ~ "@non"
+    )
+  ) %>%
+  select(-lang)
+
+
+vie_speaker <- vie_speaker_original %>%
+  rename(
+    RecordingNo = V1,
+    Pseudonym = V2,
+    Generation = V3,
+    Gender = V4,
+    Year.of.Birth = V5,
+    Occupation = V6
+  ) 
+
+vie_speaker_formerge <- vie_speaker %>%
+  select(Pseudonym, Gender, Year.of.Birth)
+
+
+vie.combine <- vie %>%
+  inner_join(vie_freq_formerge, by = c("sent_word" = "word", "langs" = "langs")) %>%
+  inner_join(vie_speaker_formerge, by = c("speaker2" = "Pseudonym")) %>%
+  mutate(
+    vn_en = as.factor(vn_en),
+    en_vn = as.factor(en_vn),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    POS = as.factor(pos),
+    SPEAKER = as.factor(speaker2),
+    GENERATION = as.factor(generation),
+    GENDER = as.factor(Gender),
+    TOKEN = if_else(zipfreq > 4, sent_word, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN),
+  )
+
+
+# Check the merge direction from the other
+# vie %>%
+#   anti_join(vie_freq_formerge, by = c("sent_word" = "word"))
+# vie %>%
+#   anti_join(vie_speaker_formerge, by = c("speaker2" ="Pseudonym"))
+
+# Regression data
+vie.regdata <- vie.combine %>%
+  filter(
+    langs == "@vie",
+    tone != "0"
+  ) %>%
+  mutate(
+    en_vn = as.factor(en_vn),
+    vn_en = as.factor(vn_en),
+    freq = as.numeric(freq),
+    zipfreq = as.numeric(zipfreq),
+    tone_initial = as.factor(tone_initial),
+    tone_last = as.factor(tone_last),
+    POS = as.factor(pos),
+    SPEAKER = as.factor(speaker2),
+    GENERATION = as.factor(generation),
+    GENDER = as.factor(Gender),
+    TOKEN = if_else(zipfreq > 4, sent_word, "other"), # control the frequent words
+    TOKEN = as.factor(TOKEN)
+  )
+
+vie.regdata$tone_initial = as.factor(vie.regdata$tone_initial)
+vie.regdata$tone_initial = relevel(vie.regdata$tone_initial, ref = "4")
+vie.regdata$tone_last = as.factor(vie.regdata$tone_last)
+vie.regdata$tone_last = relevel(vie.regdata$tone_last, ref = "4")
+vie.regdata$GENERATION = relevel(vie.regdata$GENERATION, ref = "1")
+vie.regdata$GENDER = relevel(vie.regdata$GENDER, ref = "M")
+vie.regdata$POS = relevel(vie.regdata$POS, ref = "ADJ")
+vie.regdata$SPEAKER = droplevels(vie.regdata$SPEAKER)
+vie.regdata$TOKEN = droplevels(vie.regdata$TOKEN)
+```
+
+### SPEAKER
+2 speakers are excluded because they only speak English.
+```{r speaker profile}
+nlevels(vie.combine$SPEAKER)
+nlevels(vie.regdata$SPEAKER) 
+
+vie.speaker <- distinct(vie.regdata,SPEAKER,.keep_all = TRUE)
+table(vie.speaker$GENERATION, vie.speaker$GENDER)
+```
+
+### TOKEN
+14 tokens with high frequency + 'other'
+```{r token}
+nlevels(vie.regdata$TOKEN)
+table(vie.regdata$TOKEN)
+```
+
+### Zipfreq
+14 Chinese words has a zipf larger than 4, cover 27% of the tokens.
+
+```{r}
+mean(vie.regdata$zipfreq)
+sd(vie.regdata$zipfreq)
+nrow(vie.regdata[vie.regdata$zipfreq > 4,])/nrow(vie.regdata)
+```
+
+
+### POS
+```{r POS}
+nlevels(vie.regdata$POS)
+table(vie.regdata$POS)
+```
+
+## Regression models of Vietnamese
+
+```{r include=FALSE}
+vie.ve <- readRDS("230205vie_ve.glmer.final.rds")
+vie.ev <- readRDS("230205vie_ev.glmer.final.rds")
+```
+
+### Vietnamese-English code switching
+
+**vie.ve <- glmer(vn_en ~ tone_last + zipfreq + POS + GENDER + GENERATION + 
+                                   (tone_last|SPEAKER) +
+                                   (1|TOKEN),
+                           data = vie.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+```{r}
+summary(vie.ve)
+```
+
+**Post-hoc comparisons**
+
+```{r}
+emmeans(vie.ve, list(pairwise~tone_last), type='response')
+```
+### English-Vietnamese code switching
+**vie.ev <- glmer(en_vn ~ tone_initial + zipfreq + POS + GENDER + GENERATION + 
+                                   (tone_initial|SPEAKER) +
+                                   (1|TOKEN),
+                           data = vie.regdata,
+                           family = binomial("logit"),
+                           control=glmerControl(optimizer="bobyqa", 
+                           optCtrl=list(maxfun=2e5),
+                           calc.derivs=FALSE), 
+                           na.action=na.omit
+                          )**
+```{r}
+summary(vie.ev)
+```
+```{r}
+emmeans(vie.ev, list(pairwise~tone_initial), type='response')
+```
+

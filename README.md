@@ -8,4 +8,4 @@ The R file `Stats_report` demonstrates the essential statistical results. We rec
 
 There is a poster that shows some preliminary results: 
 
-Li, K., Bryant, C., Yoo, K., & Nguyen, L. (2022). Tonal aspects of code-switching: Three case studies of English-Cantonese/Mandarin/Vietnamese . Cambridge Open Engage. doi:10.33774/coe-2022-fvvkn-v2 This content is a preprint and has not been peer-reviewed.
+Li, K., Bryant, C., Yoo, K., & Nguyen, L. (2022). Tonal aspects of code-switching: Three case studies of English-Cantonese/Mandarin/Vietnamese. Cambridge Open Engage. doi:[10.33774/coe-2022-fvvkn-v2](https://www.cambridge.org/engage/coe/article-details/637c039ae70b0a5ea9a5a5c8). This content is a preprint and has not been peer-reviewed.

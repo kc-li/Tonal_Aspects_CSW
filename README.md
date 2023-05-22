@@ -6,7 +6,7 @@ The three python scripts with prefix `process_` show how we process the corpus d
 
 The R markdown file (and knitted html） `Stats_report` demonstrates the essential statistical results. The R markdown file (and knitted html） `Stats_validation` shows the additional validations of model.
 
-To have a quick overview of the html files, you can prepend this fragment to the URL of any HTML file: https://htmlpreview.github.io/? (See [link](https://github.com/htmlpreview/htmlpreview.github.com))
+To have a quick overview of the html files, you can prepend this fragment to the URL of HTML files: `https://htmlpreview.github.io/?` (See [link](https://github.com/htmlpreview/htmlpreview.github.com))
 
 We are unable to share the raw data files used in analysis due to the restricted access to the corpus. However, if you obtain the access to the corpus, the data files can be reproduced using the processing python scripts. 
 

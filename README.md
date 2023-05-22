@@ -4,7 +4,7 @@ The files in this repository are supplemental material associated with the paper
 
 The three python scripts with prefix `process_` demonstrate how corpora were processed. 
 
-The R markdown file (and knitted html） `Stats_report` includes essential statistical results. The R markdown file (and knitted html） `Stats_validation` includes the additional validations of model.
+The R markdown file (and knitted html) `Stats_report` includes essential statistical results. The R markdown file (and knitted html) `Stats_validation` includes the additional validations of model.
 
 To have a quick overview of the html files, you can prepend this fragment to the URL of HTML files: `https://htmlpreview.github.io/?` (See [link](https://github.com/htmlpreview/htmlpreview.github.com))
 

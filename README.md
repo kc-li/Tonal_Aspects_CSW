@@ -1,10 +1,14 @@
 # Tonal_Aspects_CSW
 
-The files here are supplementary materials associated with the paper: Li, Bryant & Nguyen (2023): Tonal effects in code-switching: A  comparative study of English/Cantonese, Mandarin and Vietnamese. *Submitted for Review.*
+The files here are supplementary materials associated with the paper: Li, Bryant & Nguyen (2023): Tonal effects in code-switching: A comparative study of English/Cantonese, Mandarin and Vietnamese. *Submitted for Review.*
 
 The three python scripts with prefix 'process_' show how we process the corpus data. 
 
-The R file `Stats_report` demonstrates the essential statistical results. We recommend download and browse the html directly,as we are unable to share the raw data files used in analysis due to the restricted access to the corpus. However, if you obtain the access to the corpus, the data files can be reproduced using the processing python scripts.
+The R markdown file (and knitted html） `Stats_report` demonstrates the essential statistical results. The R markdown file (and knitted html） `Stats_validation` shows the additional validations of model.
+
+To have a quick overview of the html files, you can prepend this fragment to the URL of any HTML file: https://htmlpreview.github.io/? (See [link](https://github.com/htmlpreview/htmlpreview.github.com)
+
+We are unable to share the raw data files used in analysis due to the restricted access to the corpus. However, if you obtain the access to the corpus, the data files can be reproduced using the processing python scripts. 
 
 There is a poster that shows some preliminary results: 
 

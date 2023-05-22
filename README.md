@@ -2,7 +2,7 @@
 
 The files here are supplementary materials associated with the paper: Li, Bryant & Nguyen (2023): Tonal effects in code-switching: A comparative study of English/Cantonese, Mandarin and Vietnamese. *Submitted for Review.*
 
-The three python scripts with prefix 'process_' show how we process the corpus data. 
+The three python scripts with prefix `process_` show how we process the corpus data. 
 
 The R markdown file (and knitted html） `Stats_report` demonstrates the essential statistical results. The R markdown file (and knitted html） `Stats_validation` shows the additional validations of model.
 

@@ -1,6 +1,6 @@
 # Tonal_Aspects_CSW
 
-The files in this repository are supplemental material associated with the paper: Li, Bryant & Nguyen (2023): Tonal effects in code-switching: A comparative study of English/Cantonese, Mandarin and Vietnamese. *Submitted for Review.*
+The files in this repository are supplemental material associated with the paper: Li, Bryant & Nguyen (2023): Lexical tonal effects in code-switching: A comparative study of Cantonese, Mandarin and Vietnamese switching with English. *Submitted for Review.*
 
 The three python scripts with prefix `process_` demonstrate how corpora were processed. 
 

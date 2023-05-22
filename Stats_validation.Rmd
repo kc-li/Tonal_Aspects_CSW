@@ -1,0 +1,62 @@
+---
+title: "Model validation"
+output: html_document
+
+date: "2023-05-22"
+---
+
+```{r setup, include=FALSE}
+library(performance)
+library(DHARMa)
+library(dplyr)
+library(tidyr)
+```
+
+```{r read the model, include=FALSE}
+can.ce <- readRDS("230205can_ce.glmer.final.rds")
+can.ec <- readRDS("230205can_ec.glmer.final.rds")
+
+man.me <- readRDS("230205man_me.glmer.final.rds")
+man.em <- readRDS("230205man_em.glmer.final.rds")
+
+vie.ve <- readRDS("230205vie_ve.glmer.final.rds")
+vie.ev <- readRDS("230205vie_ev.glmer.final.rds")
+```
+
+## Check multicollinearity problem
+
+> The variance inflation factor is a measure to analyze the magnitude of multicollinearity of model terms. A VIF less than 5 indicates a low correlation of that predictor with other predictors. A value between 5 and 10 indicates a moderate correlation, while VIF values larger than 10 are a sign for high, not tolerable correlation of model predictors (James et al. 2013). The Increased SE column in the output indicates how much larger the standard error is due to the association with other predictors conditional on the remaining variables in the model. Note that these thresholds, although commonly used, are also criticized for being too high. Zuur et al. (2010) suggest using lower values, e.g. a VIF of 3 or larger may already no longer be considered as "low". (https://easystats.github.io/performance/reference/check_collinearity.html)
+
+All VIFs below are smaller than 3.
+```{r}
+check_collinearity(can.ce)
+check_collinearity(can.ec)
+
+check_collinearity(man.me)
+check_collinearity(man.em)
+
+check_collinearity(vie.ve)
+check_collinearity(vie.ev)
+```
+
+## Check residual patterns
+
+> If you have a lot of data points, residual diagnostics will nearly inevitably become significant, because having a perfectly fitting model is very unlikely. That, however, doesn’t necessarily mean that you need to change your model. (https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html#interpreting-residuals-and-recognizing-misspecification-problems)
+
+The residual patterns do not suggest any issues.
+
+```{r}
+simulationOutput <- simulateResiduals(fittedModel = can.ce, plot = T)
+simulationOutput <- simulateResiduals(fittedModel = can.ec, plot = T)
+```
+
+```{r}
+simulationOutput <- simulateResiduals(fittedModel = man.me, plot = T)
+simulationOutput <- simulateResiduals(fittedModel = man.em, plot = T)
+```
+
+```{r}
+simulationOutput <- simulateResiduals(fittedModel = vie.ve, plot = T)
+simulationOutput <- simulateResiduals(fittedModel = vie.ev, plot = T)
+```
+
